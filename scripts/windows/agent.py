@@ -13,6 +13,7 @@ import subprocess
 import sys
 import threading
 import time
+from local_loop import WindowsOCR, JevFallback, execute_actions, run_route
 
 GAME_NAMES = {"minecraft.windows.exe", "minecraft.windowsbeta.exe"}
 CREATE_NO_WINDOW = 0x08000000
@@ -576,6 +577,8 @@ class Agent:
         self.n = Win32()
         self.target = None
         self.logs = []
+        self.ocr = None
+        self.jev = JevFallback()
 
     def attach(self, pid=None, hwnd=None):
         if self.target:
@@ -663,6 +666,16 @@ class Agent:
         if not self.target:
             raise RuntimeError("No Minecraft window attached")
         t = self.target
+        if cmd == "execute":
+            return execute_actions(t, req.get("actions"), self.dispatch, key_code,
+                                   req.get("focus", True), req.get("capture", True), req.get("width", 854))
+        if cmd == "run_route":
+            def observe(shot, regions, language):
+                if self.ocr is None:
+                    self.ocr = WindowsOCR()
+                return self.ocr.observe(shot, regions, language)
+            return run_route(t, req.get("plan", {}), self.dispatch, key_code, observe,
+                             req.get("mode", "local"), self.jev.choose, req.get("focus", True))
         if cmd == "detach":
             if req.get("close_game", False):
                 t.valid()
@@ -720,6 +733,10 @@ class Agent:
         if self.target:
             self.target.close()
             self.target = None
+        if self.ocr:
+            self.ocr.close()
+            self.ocr = None
+        self.jev.close()
 
 
 def main():

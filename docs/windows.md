@@ -92,6 +92,34 @@ the caller never sends a matching release. Abrupt OS termination can prevent cle
 - `launch`, `attach`, `stop`, `list`, `preflight`, `state`, `focus`, `resize`
 - `screenshot`, `key`, `hold_key`, `type`, `chat`, `look`, `click`, `mouse_move_to`, `scroll`
 - `open_uri`, `add_server`, `wait`, `log`
+- `execute`: one short explicit action sequence, one final image
+- `run_route`: reviewed menu actions with local Windows OCR checks
+
+Codex is the main planner. For short established sequences, prefer `execute` over
+one model turn per input. A batch can include key press/release, mouse input, text,
+and short waits; it always releases held inputs at the end. It permits at most
+15 seconds of explicit input/wait time and stops on failure. `capture:false`
+suppresses the final capture when it is not needed.
+
+`run_route` accepts `plan: {width,height,language,start,steps}`. `start` and each
+step's `after` contain a description, inspected OCR crop `regions`, and literal
+`all` label clauses. A step contains `action` (`click` or a navigation `key`) and
+`settle_ms`. It checks every screen locally and returns one final/failed image.
+Window changes, missing labels or errors stop the route without blind retries.
+The persistent Windows OCR worker uses installed Windows language data; it needs
+no model API key. `mode:local` is the default.
+
+Optional `mode:hybrid` sends unmatched OCR text to TypeSafe's `jev-1.13.0` model
+using `TYPESAFE_API_KEY` from the MCP process environment. Codex remains the planner.
+Jev chooses only whether the already-described screen matches; low confidence,
+missing keys and errors return fallback. Configure the key locally, not in a chat,
+route file, repository, or command-line argument. The connection can forward it
+with `env_vars = ['TYPESAFE_API_KEY']` in the MCP configuration. Normal MCP actions,
+batched execution and local OCR work without Jev.
+
+Install the repository's `skills/minecraft-windows` folder in Codex's skills
+directory (a directory junction to the maintained checkout also works). It teaches
+the native MCP / batched execution / local route workflow and the platform limits.
 
 Screenshots crop out the window's title bar and borders and use physical pixels.
 Click coordinates refer to the last image returned by the helper; the helper maps
@@ -126,16 +154,17 @@ with Enter; only call it after verifying that the client is in a world.
 - `add_server` dispatches the add-server URI and returns `saved:"unverified"`.
   Automatic `join:true` is rejected. Inspect/complete the UI and then explicitly
   dispatch a connect URI if desired. No saved-server files are rewritten.
-- The bundled Linux headless/JeV launch scripts still require their Linux runtime.
-  Their game socket and `/proc` attachment are not the Windows helper transport.
-  This backend does not require JeV or a separate model API key.
+- The original Linux headless/JeV scripts retain their Linux attachment logic.
+  Windows uses the `run_route` MCP tool instead; its worker transport and OCR are
+  local to the same Windows MCP connection. Jev remains optional.
 
 ## Verify
 
 ```powershell
 bun run typecheck
 bun test
-.\.venv\Scripts\python.exe -m unittest discover -s scripts/windows -p test_agent.py -v
+.\.venv\Scripts\python.exe -m unittest discover -s scripts/windows -p 'test_*.py' -v
+.\.venv\Scripts\python.exe scripts/windows/ocr_smoke.py
 .\.venv\Scripts\python.exe scripts/windows/input_smoke.py
 bun scripts/smoke.ts
 ```
@@ -147,6 +176,11 @@ to Minecraft. The game smoke is read-only: it attaches, captures, checks duplica
 attachment rejection and unsupported controls, and detaches without closing the game.
 Set `MINECRAFT_SMOKE_PID` when more than one game window exists. Evidence stays in
 git-ignored `.artifacts/windows-smoke`.
+
+`ocr_smoke.py` recognizes a generated test image without capturing the desktop or
+game. A local three-sample check took 349 ms including worker initialization, then
+11 and 7 ms with the worker warm. This verifies the OCR plumbing on a clean synthetic
+label image, not arbitrary Minecraft font/layout recognition or complete route speed.
 
 For manual testing, `bun scripts/windows/console.ts` accepts one
 `{"name":"tool","arguments":{...}}` JSON request per line. It saves images locally.

@@ -10,7 +10,7 @@ import { externalServerUri } from "../add_server.ts";
 const bridge = new WindowsBridge();
 const controller = new WindowsController(bridge);
 const server = new McpServer({ name: "minecraft-windows", version: "0.2.0" }, {
-  instructions: "Controls native Minecraft for Windows. Start with list, then attach to an exact PID or launch. Screenshots contain only the game client area. Call focus before input; input fails if another app has focus. Screenshot pixel coordinates are mapped internally and expire on window resize. stop detaches by default; close_game:true requests normal game closure. Windows does not support hidden clients, isolated profiles, render/FPS control, or automatic server confirmation. Verify screenshots after actions; URI dispatch is not proof of a saved server or joined world.",
+  instructions: "Codex is the planner for native Minecraft on Windows. Reuse the attached client. Use execute for a short known action sequence with one final image; use run_route for inspected menu routes with local OCR checks. Avoid a model turn per key or screenshot. list then attach to an exact PID, or launch. Input requires game focus and aborts on focus loss. Screenshot coordinates expire on resize. stop detaches without closing. Jev is optional text-only fallback, enabled only by mode:hybrid plus TYPESAFE_API_KEY. Hidden clients, FPS/render gating and isolated profiles are unavailable. Verify screenshots after actions; input/URI success does not prove a menu transition or joined world.",
 });
 const instance = { instance: z.string().optional().describe("Attached instance ID; defaults to this connection's client") };
 const id = z.string().regex(/^[a-zA-Z0-9_-]+$/).max(64).default("main");
@@ -55,6 +55,45 @@ server.tool("screenshot", "Capture the attached game client area with Windows Gr
 const key = z.string().min(1).max(32);
 const action = z.enum(["tap", "press", "release"]).default("tap");
 const hold_ms = z.number().int().min(1).max(60_000).default(60);
+const batchHold = z.number().int().min(1).max(5000).default(60);
+const point = { x: z.number().nonnegative(), y: z.number().nonnegative() };
+const batchAction = z.discriminatedUnion("cmd", [
+  z.object({ cmd: z.literal("key"), key, action, hold_ms: batchHold, mods: z.array(z.enum(["shift", "ctrl", "alt"])).max(3).optional() }),
+  z.object({ cmd: z.literal("click"), button: z.enum(["left", "right", "middle"]).default("left"), x: point.x.optional(), y: point.y.optional(), action, hold_ms: batchHold }),
+  z.object({ cmd: z.literal("mouse_pos"), ...point }),
+  z.object({ cmd: z.literal("mouse_move"), dx: z.number().int().min(-32767).max(32767), dy: z.number().int().min(-32767).max(32767) }),
+  z.object({ cmd: z.literal("scroll"), dy: z.number().min(-100).max(100) }),
+  z.object({ cmd: z.literal("text"), text: z.string().max(256) }),
+  z.object({ cmd: z.literal("wait"), ms: z.number().int().min(1).max(5000) }),
+]);
+function actionResult(result: Record<string, unknown>) {
+  const { screenshot: frame, ...metadata } = result;
+  const shot = frame as { png_base64: string; [key: string]: unknown } | undefined;
+  const { png_base64, ...dimensions } = shot ?? {};
+  return { isError: result.status === "failed", content: [
+    ...(png_base64 ? [{ type: "image" as const, data: png_base64 as string, mimeType: "image/png" }] : []),
+    { type: "text" as const, text: JSON.stringify({ ...metadata, ...(shot ? { screenshot: dimensions } : {}) }) },
+  ] };
+}
+server.tool("execute", "Execute a short explicit action sequence locally, release held inputs, and return one final screenshot. No planner/model round trip between actions. At most 15s of planned waits/input; aborts on focus loss", {
+  ...instance, actions: z.array(batchAction).min(1).max(32), focus: z.boolean().default(true),
+  capture: z.boolean().default(true), width: z.number().int().min(64).max(1920).default(854),
+}, async ({ instance, ...args }) => actionResult(await controller.call("execute", args, instance)));
+const screen = z.object({
+  description: z.string().min(1).max(500), all: z.array(z.string().min(1).max(200)).min(1).max(12),
+  regions: z.array(z.tuple([z.number().int(), z.number().int(), z.number().int(), z.number().int()])).min(1).max(8),
+});
+const routeAction = z.discriminatedUnion("cmd", [
+  z.object({ cmd: z.literal("click"), ...point, hold_ms: batchHold }),
+  z.object({ cmd: z.literal("key"), key: z.enum(["escape", "enter", "tab", "up", "down", "left", "right"]), hold_ms: batchHold }),
+]);
+server.tool("run_route", "Run a reviewed menu route with local cropped Windows OCR before and after each action; returns only the final/failed image. Unknown screens stop the route. Codex must inspect the layout and supply the plan first. Hybrid optionally sends OCR text to Jev using TYPESAFE_API_KEY", {
+  ...instance, focus: z.boolean().default(true), mode: z.enum(["local", "hybrid"]).default("local"),
+  plan: z.object({ width: z.number().int().min(320).max(1920), height: z.number().int().min(180).max(1080),
+    language: z.string().min(2).max(32).default("en-US"), start: screen,
+    steps: z.array(z.object({ action: routeAction, after: screen, settle_ms: z.number().int().min(0).max(3000).default(250) })).min(1).max(12),
+  }),
+}, async ({ instance, ...args }) => actionResult(await controller.call("run_route", args, instance)));
 server.tool("key", "Send a game key. Requires foreground focus; held inputs release on focus loss, detach, or after 60s", {
   ...instance, key, action, hold_ms, mods: z.array(z.enum(["shift", "ctrl", "alt"])).max(3).optional(),
 }, async ({ instance, ...args }) => text(await controller.call("key", args, instance)));
