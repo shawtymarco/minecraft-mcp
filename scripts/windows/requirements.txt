@@ -1,0 +1,2 @@
+# WGC capture by HWND; numpy and OpenCV are dependencies of windows-capture.
+windows-capture==2.0.1

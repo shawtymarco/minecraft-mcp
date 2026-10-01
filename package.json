@@ -1,14 +1,16 @@
 {
   "name": "mcpelauncher-agent",
   "version": "0.1.0",
-  "description": "MCP server that drives a real Minecraft Bedrock client through mcpelauncher's agent socket",
+  "description": "MCP server for native Minecraft on Windows and agent-enabled mcpelauncher on Linux",
   "type": "module",
   "bin": {
     "mcpelauncher-agent": "src/index.ts"
   },
   "scripts": {
     "start": "bun run src/index.ts",
-    "typecheck": "bunx tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "smoke": "bun scripts/smoke.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.17.0",

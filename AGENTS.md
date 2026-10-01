@@ -1,5 +1,23 @@
 # Minecraft MCP — agent guidelines
 
+## Windows backend
+
+- `src/index.ts` dispatches to `src/windows/server.ts` on Windows and `src/linux.ts` otherwise.
+- Windows uses the persistent `scripts/windows/agent.py` helper over stdin/stdout.
+  Its commands are separate from the Linux launcher socket protocol below.
+- Keep screenshots scoped to the selected game window and coordinates scoped to
+  the latest client-area screenshot. Reject stale dimensions and background input.
+- Preserve exclusive per-process ownership and key/button release on focus loss,
+  disconnect, and bounded hold timeout. Never force kill a user's game.
+- Run `bun run typecheck`, `bun test`, and Python validation tests. On Windows,
+  run `scripts/windows/input_smoke.py` for the disposable fixture and
+  `bun scripts/smoke.ts` against an existing game. Report which native game actions
+  were actually observed; a successful SendInput call is not semantic proof.
+- Publish fork work to `shawtymarco/minecraft-mcp`; the upstream push note below
+  describes the original Linux maintainer's deployment, not this fork's target.
+
+## Linux backend
+
 Bun + TypeScript MCP server over the `--agent-socket` of the bedrock-mc mcpelauncher fork
 (github.com/bedrock-mc/mcpelauncher-manifest, local clone ~/Coding/other/mcpelauncher-manifest). The socket
 protocol is documented in README.md; the server side is `mcpelauncher-client/src/agent_server.cpp` in the fork.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // Run a caller-reviewed route on the caller's existing Minecraft instance.
 // Uses the installed MCP transport adapter; never launches or adopts a client implicitly.
-import { AgentSocket } from '/home/danick/.local/share/minecraft-mcp/src/socket.ts';
+import { AgentSocket } from '../../../src/socket.ts';
 import { readFile, mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';

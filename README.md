@@ -1,10 +1,45 @@
 # Minecraft MCP
 
-An MCP server and agent skills for controlling a real Minecraft Bedrock client through the
-[mcpelauncher agent socket](https://github.com/bedrock-mc/mcpelauncher-manifest). This checkout is
-the source for the installed `minecraft` MCP and `minecraft-headless` skill on the Fedora host.
+An MCP server for controlling a real Minecraft Bedrock client. This fork adds a
+**native Windows backend** for Minecraft for Windows, including registered custom
+installations such as OderSo. Linux uses the existing
+[mcpelauncher agent socket](https://github.com/bedrock-mc/mcpelauncher-manifest).
+`src/index.ts` selects the backend for the host OS.
 
-## Requirements
+## Windows quick start
+
+Requires Windows 10 2004+ or Windows 11 (x64), Bun, Python 3.10+ x64, and an installed
+Minecraft for Windows. No WSL or modified Linux launcher is needed. Minecraft runs
+in the interactive desktop session; input requires it to be in the foreground.
+
+```powershell
+git clone https://github.com/shawtymarco/minecraft-mcp.git
+cd minecraft-mcp
+.\scripts\windows\setup.ps1
+bun run src/index.ts
+```
+
+The setup script creates a project-local `.venv`, installs the pinned Windows
+capture library and Bun dependencies, and checks TypeScript. It does not install
+Python, Bun, or Minecraft. See [Windows setup and limitations](docs/windows.md)
+for Codex configuration, custom Python paths, tools, and verification.
+
+Start with `list`, then `attach` to the returned PID for an already-running game.
+Call `focus` before input and `screenshot` before coordinate clicks. `stop` releases
+the connection without closing the game; explicitly set `close_game: true` to
+request normal window closure. `launch` refuses to start a second running client.
+
+| Feature | Native Windows | Linux launcher |
+|---|---|---|
+| MCP screenshot, key, mouse, camera, wheel | Yes | Yes |
+| Text input | Unicode via SendInput | Printable ASCII via XTest |
+| Attach to a running native game | Yes, exact PID/HWND | MCP-owned instances |
+| URI dispatch | Targeted registered Windows package | Launcher socket |
+| Automatic server-save/join confirmation | Inspect and confirm through tools | Integrated 854×480 flow |
+| Hidden clients, render gating, FPS control | Unavailable | Supported |
+| CPU/RAM enforcement, isolated profiles | Unavailable | Existing Linux controls |
+
+## Linux requirements
 
 - Linux with a user systemd manager, `xvfb-run`, `xauth`, Python 3, and the agent-enabled
   mcpelauncher client. The bundled `bin/mcpelauncher-headless-fedora` documents this host's
@@ -20,7 +55,7 @@ bun run typecheck
 bun run src/index.ts
 ```
 
-## Session controls
+## Linux session controls
 
 `preflight` and `launch` count actual clients across MCP connections, check host load, and
 require available RAM equal to the requested session memory limit plus 2 GiB. At most four
@@ -49,7 +84,7 @@ systemctl --user daemon-reload
 systemctl --user enable --now minecraft-mcp-cleanup.timer
 ```
 
-## Tools
+## Linux tools
 
 `preflight` · `launch` · `stop` · `list` · `state` · `screenshot` · `key` · `hold_key` · `type` ·
 `chat` · `look` · `click` · `mouse_move_to` · `scroll` · `add_server` · `open_uri` · `set_fps` ·
@@ -97,6 +132,12 @@ saved entries. The regular `startup_uri` launch option passes a Minecraft URI wi
 assuming it succeeded; inspect its effect before acting.
 
 ## Verification
+
+`bun test` runs platform-independent tests. `bun run scripts/smoke.ts` selects the
+host's smoke test. On Windows it attaches to an existing game, captures it,
+verifies exclusive control, and detaches without game input or closing it. The
+Python validation and disposable-window input tests are documented in
+[docs/windows.md](docs/windows.md).
 
 `scripts/benchmark.ts` runs a single bounded client, records launch, screenshot, and stop
 timings, and always stops the client on exit. It requires the same launcher environment

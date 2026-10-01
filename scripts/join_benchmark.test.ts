@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { expandAddServerTimings, parseOptions, withoutDisposableServer } from "./join_benchmark.ts";
 
 test("combined mode names the verified Save, URI, and Continue route", () => {
-  const args = ["--target", "127.0.0.1:19357", "--output", "/tmp/minecraft-join-test", "--mode", "combined"];
+  const args = ["--target", "127.0.0.1:19357", "--output", join(tmpdir(), "minecraft-join-test"), "--mode", "combined"];
   expect(parseOptions(args).mode).toBe("combined");
   expect(parseOptions(args).cpuQuotaPercent).toBe(250);
   expect(parseOptions(args).fpsCap).toBe(20);

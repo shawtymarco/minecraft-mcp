@@ -11,7 +11,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface, type Interface } from "node:readline";
 import { mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { PNG } from "pngjs";
 import { externalServerPromptReady, mainMenuReady, serversTabReady } from "../src/menu_ready.ts";
 import { nativeInput } from "../src/native_input.ts";
@@ -41,7 +41,8 @@ export function parseOptions(argv: string[]): Options {
   const mode = args.get("mode") ?? "saved";
   if (mode !== "saved" && mode !== "combined" && mode !== "direct-uri" && mode !== "uri-only" && mode !== "startup-uri" && mode !== "launch-join") throw new Error("--mode must be saved, combined, direct-uri, uri-only, startup-uri, or launch-join");
   const output = args.get("output") ? resolve(args.get("output")!) : mkdtempSync(join(tmpdir(), "minecraft-join-bench-"));
-  if (!output.startsWith(resolve(tmpdir()) + "/")) throw new Error("Benchmark evidence must stay under /tmp");
+  const withinTemp = relative(resolve(tmpdir()), output);
+  if (!withinTemp || withinTemp === ".." || withinTemp.startsWith(`..${sep}`) || isAbsolute(withinTemp)) throw new Error("Benchmark evidence must stay under the system temporary directory");
   const timeoutMs = Number(args.get("timeout-ms") ?? "90000");
   if (!Number.isInteger(timeoutMs) || timeoutMs < 5_000 || timeoutMs > 180_000) throw new Error("--timeout-ms must be 5000–180000");
   const cpuQuotaPercent = Number(args.get("cpu-quota-percent") ?? "250");
